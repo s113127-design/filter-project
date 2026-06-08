@@ -22,55 +22,75 @@ with col2:
         st.session_state.camera_on = False
         st.rerun()
 
-# --- MediaPipe 初始化設定 ---
+# --- MediaPipe 輕量化初始化 ---
 mp_face_mesh = mp.solutions.face_mesh
 mp_hands = mp.solutions.hands
-mp_drawing = mp.solutions.drawing_utils # 用來畫出關節點線條的工具
 
 class VideoProcessor:
     def __init__(self):
         self.role_mode = "愛因斯坦"
-        # 在這裡初始化偵測器，這樣網頁開起來時只會載入一次
-        self.face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
-        self.hands = mp_hands.Hands(max_num_hands=2, min_detection_confidence=0.5)
+        # 關鍵優化 1：refine_landmarks 改為 False（不偵測眼球微細孔，省下大量運算）
+        self.face_mesh = mp_face_mesh.FaceMesh(
+            max_num_faces=1, 
+            refine_landmarks=False,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        # 關鍵優化 2：限制只偵測一隻手，降低負擔
+        self.hands = mp_hands.Hands(
+            max_num_hands=1, 
+            min_detection_confidence=0.6,
+            min_tracking_confidence=0.6
+        )
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         h, w, _ = img.shape
         
-        # MediaPipe 需要 RGB 格式
+        # 轉成 RGB 供 MediaPipe 處理
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # 開始偵測臉和手
         face_results = self.face_mesh.process(rgb_img)
-        hand_results = self.hands.process(rgb_img)
         
-        # 【測試用】如果偵測到臉，就把藍色網格畫在臉上
-        if face_results.multi_face_landmarks:
-            for face_landmarks in face_results.multi_face_landmarks:
-                mp_drawing.draw_landmarks(
-                    image=img,
-                    landmark_list=face_landmarks,
-                    connections=mp_face_mesh.FACEMESH_TESSELLATION,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=1, circle_radius=1)
-                )
-                
-        # 【測試用】如果偵測到手，就把紅色骨架畫在手上
-        if hand_results.multi_hand_landmarks:
-            for hand_landmarks in hand_results.multi_hand_landmarks:
-                mp_drawing.draw_landmarks(
-                    image=img,
-                    landmark_list=hand_landmarks,
-                    connections=mp_hands.HAND_CONNECTIONS,
-                    landmark_drawing_spec=mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=2)
-                )
-
-        # 這裡保留原本的愛因斯坦變黑白測試
-        if self.role_mode == "愛因斯坦":
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        # 只有在特定模式才啟動手部偵測，平常關閉省效能
+        hand_results = None
+        if self.role_mode in ["孔子", "秦始皇"]:
+            hand_results = self.hands.process(rgb_img)
+        
+        # --- 輕量化愛因斯坦邏輯 ---
+        if self.role_mode == "愛因斯坦" and face_results.multi_face_landmarks:
+            face_landmarks = face_results.multi_face_landmarks[0]
             
+            # 抓取上下唇內側關鍵點（用輕量化的索引點）
+            # 在 refine_landmarks=False 時，上唇 13, 下唇 14 依然適用
+            upper_lip = face_landmarks.landmark[13]
+            lower_lip = face_landmarks.landmark[14]
+            forehead = face_landmarks.landmark[10]
+            chin = face_landmarks.landmark[152]
+            
+            lip_dist = abs(upper_lip.y - lower_lip.y) * h
+            face_height = abs(forehead.y - chin.y) * h
+            
+            # 只要偵測到張嘴，畫面就變黑白
+            if lip_dist > (face_height * 0.15):
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+                
+                # 在畫面上打個字提示吐舌頭成功，先代替貼頭髮測試
+                cv2.putText(img, "Einstein Mode ACTIVE!", (50, 50), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        # --- 輕量化秦始皇邏輯 ---
+        elif self.role_mode == "秦始皇" and hand_results and hand_results.multi_hand_landmarks:
+            hand_landmarks = hand_results.multi_hand_landmarks[0]
+            thumb_tip = hand_landmarks.landmark[4]
+            index_tip = hand_landmarks.landmark[8]
+            
+            # 比讚判斷：大拇指尖端高於食指尖端
+            if thumb_tip.y < index_tip.y:
+                cv2.putText(img, "Qin Shihuang Mode ACTIVE!", (50, 50), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
         return frame.from_ndarray(img, format="bgr24")
 
 if st.session_state.camera_on:
