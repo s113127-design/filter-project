@@ -5,13 +5,11 @@ import mediapipe as mp
 import numpy as np
 
 st.title("歷史迷因濾鏡專題 📸")
-st.write("👉 伸出大拇指比讚觸發【秦始皇】，張大嘴巴觸發【愛因斯坦】。按下 Capture 即可拍照！")
+st.write("👉 Thumbs up for [Qin Shihuang], open mouth for [Einstein]. Press Capture to take a photo!")
 
-# --- 初始化 Session State（用來存照片歷史紀錄） ---
 if "history" not in st.session_state:
-    st.session_state.history = []  # 格式：[(原圖, 濾鏡圖), ...]
+    st.session_state.history = []
 
-# --- 讀取素材圖片 ---
 @st.cache_data
 def load_resources():
     hair = cv2.imread("hair.png", cv2.IMREAD_UNCHANGED)
@@ -21,7 +19,6 @@ def load_resources():
 
 hair_img, hat_img, bear_img = load_resources()
 
-# 透明 PNG 貼圖函式
 def overlay_image(background, overlay, x, y, size=None):
     if overlay is None: return background
     bg_h, bg_w = background.shape[:2]
@@ -44,7 +41,6 @@ def overlay_image(background, overlay, x, y, size=None):
         background[y1:y2, x1:x2] = crop_overlay[:, :, :3]
     return background
 
-# --- MediaPipe 初始化 ---
 mp_face_mesh = mp.solutions.face_mesh
 mp_hands = mp.solutions.hands
 
@@ -52,25 +48,22 @@ class VideoProcessor:
     def __init__(self):
         self.face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=False, min_detection_confidence=0.5)
         self.hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.5)
-        # 用來記錄最新一格的畫面，供拍照按鈕抓取
         self.latest_orig = None
         self.latest_filter = None
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        self.latest_orig = img.copy() # 先備份未加濾鏡的原圖
+        self.latest_orig = img.copy()
         
         h, w, _ = img.shape
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # 同時執行臉部與手部偵測
         face_results = self.face_mesh.process(rgb_img)
         hand_results = self.hands.process(rgb_img)
         
-        # 預設狀態文字
-        status_text = "偵測中... 請做出對應動作"
+        # 👇 1. 把預設字串改成英文
+        status_text = "Scanning... Make a gesture!"
         
-        # 1. 檢測愛因斯坦（張嘴/吐舌）
         if face_results.multi_face_landmarks:
             face_landmarks = face_results.multi_face_landmarks[0]
             upper_lip = face_landmarks.landmark[13]
@@ -81,9 +74,9 @@ class VideoProcessor:
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             face_height = abs(forehead.y - chin.y) * h
             
-            # 如果張嘴大於臉高的 15%
             if lip_dist > (face_height * 0.15):
-                status_text = "💡 觸發：愛因斯坦模式"
+                # 👇 2. 觸發字串改成英文
+                status_text = "ACTIVE: Einstein Mode"
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
                 if hair_img is not None:
@@ -91,16 +84,15 @@ class VideoProcessor:
                     hair_h = int(hair_w * (hair_img.shape[0] / hair_img.shape[1]))
                     img = overlay_image(img, hair_img, int(forehead.x * w - hair_w / 2), int(forehead.y * h - hair_h * 0.8), size=(hair_w, hair_h))
 
-        # 2. 檢測秦始皇（比讚）
         if hand_results and hand_results.multi_hand_landmarks:
             hand_landmarks = hand_results.multi_hand_landmarks[0]
             thumb_tip = hand_landmarks.landmark[4]
             thumb_ip = hand_landmarks.landmark[3]
             index_mcp = hand_landmarks.landmark[5]
             
-            # 比讚判定
             if thumb_tip.y < thumb_ip.y and thumb_tip.y < index_mcp.y:
-                status_text = "💡 觸發：秦始皇模式"
+                # 👇 3. 觸發字串改成英文
+                status_text = "ACTIVE: Qin Shihuang Mode"
                 if face_results.multi_face_landmarks:
                     face_landmarks = face_results.multi_face_landmarks[0]
                     forehead = face_landmarks.landmark[10]
@@ -115,13 +107,13 @@ class VideoProcessor:
                     bear_h = int(bear_w * (bear_img.shape[0] / bear_img.shape[1]))
                     img = overlay_image(img, bear_img, int(thumb_tip.x * w - bear_w / 2), int(thumb_tip.y * h - bear_h - 10), size=(bear_w, bear_h))
 
-        # 在畫面上印出當前自動辨識的狀態
-        cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
+        # 這裡會印出狀態字，現在是英文了就不會變問號囉！
+        cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         
-        self.latest_filter = img.copy() # 儲存加了濾鏡後的圖
+        self.latest_filter = img.copy()
         return frame.from_ndarray(img, format="bgr24")
 
-# --- 網頁畫面佈局 ---
+# --- 網頁畫面佈局 (這裡本來就支援中文，不用改) ---
 ctx = webrtc_streamer(
     key="auto-meme-filter", 
     video_processor_factory=VideoProcessor,
@@ -129,14 +121,10 @@ ctx = webrtc_streamer(
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-# 拍照按鈕
 if st.button("📸 Capture (拍照)", use_container_width=True):
     if ctx.video_processor and ctx.video_processor.latest_orig is not None:
-        # 將最新的原圖與濾鏡圖轉回 RGB 供 Streamlit 顯示，並存入歷史紀錄
         orig_rgb = cv2.cvtColor(ctx.video_processor.latest_orig, cv2.COLOR_BGR2RGB)
         filter_rgb = cv2.cvtColor(ctx.video_processor.latest_filter, cv2.COLOR_BGR2RGB)
-        
-        # 插入到歷史紀錄的最前面（最新拍的在最前）
         st.session_state.history.insert(0, (orig_rgb, filter_rgb))
         st.success("拍照成功！已加到下方紀錄中。")
     else:
@@ -144,10 +132,9 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
 
 st.markdown("---")
 
-# --- 顯示剛拍得照片 (草圖中央區域) ---
 if st.session_state.history:
     st.subheader("🖼️ 剛剛拍到的影像")
-    current_orig, current_filter = st.session_state.history[0] # 抓最新的一張
+    current_orig, current_filter = st.session_state.history[0]
     
     col_orig, col_filt = st.columns(2)
     with col_orig:
@@ -157,11 +144,9 @@ if st.session_state.history:
 
     st.markdown("---")
 
-    # --- 歷史紀錄列 (草圖最下方區域) ---
     st.subheader("📜 歷史拍照紀錄")
-    # 用欄位並排展示先前拍的所有照片
-    cols = st.columns(max(5, len(st.session_state.history))) # 至少切 5 格
+    cols = st.columns(max(5, len(st.session_state.history)))
     for idx, (orig, filt) in enumerate(st.session_state.history):
-        if idx < 5: # 最多展示最近 5 次的微縮圖
+        if idx < 5:
             with cols[idx]:
                 st.image(filt, caption= f"紀錄 #{len(st.session_state.history)-idx}", use_container_width=True)
