@@ -4,7 +4,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-st.title("歷史迷因濾鏡專題 📸")
+st.title("像個偉(偽)人一樣 📸")
 st.write("👉 Thumbs up for [Qin Shihuang], open mouth for [Einstein]. Press Capture to take a photo!")
 
 if "history" not in st.session_state:
