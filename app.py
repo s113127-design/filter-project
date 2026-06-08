@@ -2,24 +2,47 @@ import streamlit as st
 from streamlit_webrtc import webrtc_streamer
 import cv2
 import mediapipe as mp
+import numpy as np
 
 st.title("歷史迷因濾鏡專題 📸")
+st.write("👉 伸出大拇指比讚觸發【秦始皇】，張大嘴巴觸發【愛因斯坦】。按下 Capture 即可拍照！")
 
-if "camera_on" not in st.session_state:
-    st.session_state.camera_on = True
+# --- 初始化 Session State（用來存照片歷史紀錄） ---
+if "history" not in st.session_state:
+    st.session_state.history = []  # 格式：[(原圖, 濾鏡圖), ...]
 
-role = st.selectbox("請選擇角色", ["愛因斯坦", "孔子", "秦始皇", "釋迦牟尼佛", "路易十六"])
-st.write(f"當前模式：{role}")
+# --- 讀取素材圖片 ---
+@st.cache_data
+def load_resources():
+    hair = cv2.imread("hair.png", cv2.IMREAD_UNCHANGED)
+    hat = cv2.imread("hat.png", cv2.IMREAD_UNCHANGED)
+    bear = cv2.imread("bear.png", cv2.IMREAD_UNCHANGED)
+    return hair, hat, bear
 
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("開啟/重設鏡頭 🟢"):
-        st.session_state.camera_on = True
-        st.rerun()
-with col2:
-    if st.button("完全關閉鏡頭 🔴"):
-        st.session_state.camera_on = False
-        st.rerun()
+hair_img, hat_img, bear_img = load_resources()
+
+# 透明 PNG 貼圖函式
+def overlay_image(background, overlay, x, y, size=None):
+    if overlay is None: return background
+    bg_h, bg_w = background.shape[:2]
+    if size is not None:
+        overlay = cv2.resize(overlay, size, interpolation=cv2.INTER_AREA)
+    h, w = overlay.shape[:2]
+    if x >= bg_w or y >= bg_h or x + w <= 0 or y + h <= 0: return background
+    x1, y1 = max(0, x), max(0, y)
+    x2, y2 = min(bg_w, x + w), min(bg_h, y + h)
+    overlay_x1, overlay_y1 = x1 - x, y1 - y
+    overlay_x2, overlay_y2 = overlay_x1 + (x2 - x1), overlay_y1 + (y2 - y1)
+    crop_overlay = overlay[overlay_y1:overlay_y2, overlay_x1:overlay_x2]
+    crop_bg = background[y1:y2, x1:x2]
+    if crop_overlay.shape[2] == 4:
+        alpha = crop_overlay[:, :, 3] / 255.0
+        alpha = np.expand_dims(alpha, axis=2)
+        composite = crop_overlay[:, :, :3] * alpha + crop_bg * (1 - alpha)
+        background[y1:y2, x1:x2] = composite
+    else:
+        background[y1:y2, x1:x2] = crop_overlay[:, :, :3]
+    return background
 
 # --- MediaPipe 初始化 ---
 mp_face_mesh = mp.solutions.face_mesh
@@ -27,32 +50,28 @@ mp_hands = mp.solutions.hands
 
 class VideoProcessor:
     def __init__(self):
-        self.role_mode = "愛因斯坦"
-        self.face_mesh = mp_face_mesh.FaceMesh(
-            max_num_faces=1, 
-            refine_landmarks=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-        self.hands = mp_hands.Hands(
-            max_num_hands=1, 
-            min_detection_confidence=0.5, # 降低門檻，讓手更容易被偵測到
-            min_tracking_confidence=0.5
-        )
+        self.face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=False, min_detection_confidence=0.5)
+        self.hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.5)
+        # 用來記錄最新一格的畫面，供拍照按鈕抓取
+        self.latest_orig = None
+        self.latest_filter = None
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
+        self.latest_orig = img.copy() # 先備份未加濾鏡的原圖
+        
         h, w, _ = img.shape
-        
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # 同時執行臉部與手部偵測
         face_results = self.face_mesh.process(rgb_img)
+        hand_results = self.hands.process(rgb_img)
         
-        hand_results = None
-        if self.role_mode in ["孔子", "秦始皇"]:
-            hand_results = self.hands.process(rgb_img)
+        # 預設狀態文字
+        status_text = "偵測中... 請做出對應動作"
         
-        # --- 愛因斯坦邏輯 ---
-        if self.role_mode == "愛因斯坦" and face_results.multi_face_landmarks:
+        # 1. 檢測愛因斯坦（張嘴/吐舌）
+        if face_results.multi_face_landmarks:
             face_landmarks = face_results.multi_face_landmarks[0]
             upper_lip = face_landmarks.landmark[13]
             lower_lip = face_landmarks.landmark[14]
@@ -62,45 +81,87 @@ class VideoProcessor:
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             face_height = abs(forehead.y - chin.y) * h
             
+            # 如果張嘴大於臉高的 15%
             if lip_dist > (face_height * 0.15):
+                status_text = "💡 觸發：愛因斯坦模式"
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-                cv2.putText(img, "Einstein Mode ACTIVE!", (50, 50), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        
-        # --- 秦始皇邏輯 (優化版) ---
-        elif self.role_mode == "秦始皇" and hand_results and hand_results.multi_hand_landmarks:
+                if hair_img is not None:
+                    hair_w = int(face_height * 1.6)
+                    hair_h = int(hair_w * (hair_img.shape[0] / hair_img.shape[1]))
+                    img = overlay_image(img, hair_img, int(forehead.x * w - hair_w / 2), int(forehead.y * h - hair_h * 0.8), size=(hair_w, hair_h))
+
+        # 2. 檢測秦始皇（比讚）
+        if hand_results and hand_results.multi_hand_landmarks:
             hand_landmarks = hand_results.multi_hand_landmarks[0]
+            thumb_tip = hand_landmarks.landmark[4]
+            thumb_ip = hand_landmarks.landmark[3]
+            index_mcp = hand_landmarks.landmark[5]
             
-            # 抓取關鍵點
-            thumb_tip = hand_landmarks.landmark[4]   # 大拇指尖
-            thumb_ip = hand_landmarks.landmark[3]    # 大拇指第一關節
-            index_mcp = hand_landmarks.landmark[5]   # 食指指根
-            wrist = hand_landmarks.landmark[0]       # 手腕
-            
-            # 【Debug 文字工具】把目前的座標印在畫面上，確定手有被偵測到
-            cv2.putText(img, f"Thumb Y: {round(thumb_tip.y, 2)}", (50, 80), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-            cv2.putText(img, f"Wrist Y: {round(wrist.y, 2)}", (50, 110), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-
-            # 寬鬆的比讚判斷邏輯：
-            # 1. 大拇指尖端(4) 高於 大拇指關節(3) 
-            # 2. 大拇指尖端(4) 高於 食指指根(5) -> 代表大拇指是強烈朝上的
+            # 比讚判定
             if thumb_tip.y < thumb_ip.y and thumb_tip.y < index_mcp.y:
-                cv2.putText(img, "Qin Shihuang Mode ACTIVE!", (50, 50), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                status_text = "💡 觸發：秦始皇模式"
+                if face_results.multi_face_landmarks:
+                    face_landmarks = face_results.multi_face_landmarks[0]
+                    forehead = face_landmarks.landmark[10]
+                    chin = face_landmarks.landmark[152]
+                    face_height = abs(forehead.y - chin.y) * h
+                    if hat_img is not None:
+                        hat_w = int(face_height * 1.8)
+                        hat_h = int(hat_w * (hat_img.shape[0] / hat_img.shape[1]))
+                        img = overlay_image(img, hat_img, int(forehead.x * w - hat_w / 2), int(forehead.y * h - hat_h * 0.85), size=(hat_w, hat_h))
+                if bear_img is not None:
+                    bear_w = int(w * 0.25)
+                    bear_h = int(bear_w * (bear_img.shape[0] / bear_img.shape[1]))
+                    img = overlay_image(img, bear_img, int(thumb_tip.x * w - bear_w / 2), int(thumb_tip.y * h - bear_h - 10), size=(bear_w, bear_h))
 
+        # 在畫面上印出當前自動辨識的狀態
+        cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 2)
+        
+        self.latest_filter = img.copy() # 儲存加了濾鏡後的圖
         return frame.from_ndarray(img, format="bgr24")
 
-if st.session_state.camera_on:
-    ctx = webrtc_streamer(
-        key="meme-filter", 
-        video_processor_factory=VideoProcessor,
-        media_stream_constraints={"video": True, "audio": False},
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-    )
-    if ctx.video_processor:
-        ctx.video_processor.role_mode = role
-else:
-    st.warning("⚠️ 鏡頭已關閉。")
+# --- 網頁畫面佈局 ---
+ctx = webrtc_streamer(
+    key="auto-meme-filter", 
+    video_processor_factory=VideoProcessor,
+    media_stream_constraints={"video": True, "audio": False},
+    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+# 拍照按鈕
+if st.button("📸 Capture (拍照)", use_container_width=True):
+    if ctx.video_processor and ctx.video_processor.latest_orig is not None:
+        # 將最新的原圖與濾鏡圖轉回 RGB 供 Streamlit 顯示，並存入歷史紀錄
+        orig_rgb = cv2.cvtColor(ctx.video_processor.latest_orig, cv2.COLOR_BGR2RGB)
+        filter_rgb = cv2.cvtColor(ctx.video_processor.latest_filter, cv2.COLOR_BGR2RGB)
+        
+        # 插入到歷史紀錄的最前面（最新拍的在最前）
+        st.session_state.history.insert(0, (orig_rgb, filter_rgb))
+        st.success("拍照成功！已加到下方紀錄中。")
+    else:
+        st.warning("請先點擊 START 開啟鏡頭再拍照喔！")
+
+st.markdown("---")
+
+# --- 顯示剛拍得照片 (草圖中央區域) ---
+if st.session_state.history:
+    st.subheader("🖼️ 剛剛拍到的影像")
+    current_orig, current_filter = st.session_state.history[0] # 抓最新的一張
+    
+    col_orig, col_filt = st.columns(2)
+    with col_orig:
+        st.image(current_orig, caption="拍到的原影像", use_container_width=True)
+    with col_filt:
+        st.image(current_filter, caption="加上濾鏡後的影相", use_container_width=True)
+
+    st.markdown("---")
+
+    # --- 歷史紀錄列 (草圖最下方區域) ---
+    st.subheader("📜 歷史拍照紀錄")
+    # 用欄位並排展示先前拍的所有照片
+    cols = st.columns(max(5, len(st.session_state.history))) # 至少切 5 格
+    for idx, (orig, filt) in enumerate(st.session_state.history):
+        if idx < 5: # 最多展示最近 5 次的微縮圖
+            with cols[idx]:
+                st.image(filt, caption= f"紀錄 #{len(st.session_state.history)-idx}", use_container_width=True)
