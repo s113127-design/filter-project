@@ -23,13 +23,12 @@ with col2:
         st.session_state.camera_on = False
         st.rerun()
 
-# 影像處理器 (新版寫法)
+# 影像處理器
 class VideoProcessor:
     def __init__(self):
         self.role_mode = "愛因斯坦"
 
     def recv(self, frame):
-        # 接收新版傳進來的影格
         img = frame.to_ndarray(format="bgr24")
         
         # 測試：愛因斯坦變黑白
@@ -44,7 +43,9 @@ if st.session_state.camera_on:
     ctx = webrtc_streamer(
         key="meme-filter", 
         video_processor_factory=VideoProcessor,
-        rtc_configuration={ # 加入這段可以大幅提升手機與各瀏覽器的連線成功率
+        # 👇 關鍵在這裡：強制指定只要視訊(True)，不要音訊(False)
+        media_stream_constraints={"video": True, "audio": False},
+        rtc_configuration={ 
             "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
         }
     )
