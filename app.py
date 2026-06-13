@@ -79,38 +79,75 @@ class VideoProcessor:
             
             # 當張嘴距離大於臉部高度的 15% 
             if lip_dist > (face_height * 0.15):
+            
                 status_text = "ACTIVE: Einstein Mode"
-                
-                # 特效變黑白
+            
+                # 黑白效果
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-                
-                # P上頭髮
+            
+                # ===== 愛因斯坦頭髮 =====
                 if einstein_hair is not None:
-                    hair_w = int(face_height * 2.3)
-                    scale = einstein_hair.shape[0] / einstein_hair.shape[1]
+            
+                    left_face = face_landmarks[234]
+                    right_face = face_landmarks[454]
+            
+                    face_width = abs(right_face.x - left_face.x) * w
+            
+                    hair_w = int(face_width * 2.2)
+            
+                    scale = (
+                        einstein_hair.shape[0]
+                        / einstein_hair.shape[1]
+                    )
+            
                     hair_h = int(hair_w * scale)
+            
                     hair_x = int(forehead.x * w - hair_w / 2)
-                    hair_y = int(forehead.y * h - hair_h * 0.85)
-                    img = overlay_image(img, einstein_hair, hair_x, hair_y, size=(hair_w, hair_h))
-                
-                # P上舌頭
-                # P上舌頭
+            
+                    hair_y = int(
+                        forehead.y * h
+                        - hair_h * 0.85
+                    )
+            
+                    img = overlay_image(
+                        img,
+                        einstein_hair,
+                        hair_x,
+                        hair_y,
+                        size=(hair_w, hair_h)
+                    )
+            
+                # ===== 愛因斯坦舌頭 =====
                 if einstein_tongue is not None:
-
+            
                     left_mouth = face_landmarks[61]
                     right_mouth = face_landmarks[291]
-    
-                    mouth_width = abs(right_mouth.x - left_mouth.x) * w
-    
+            
+                    mouth_width = (
+                        abs(right_mouth.x - left_mouth.x)
+                        * w
+                    )
+            
                     tongue_w = int(mouth_width * 1.8)
-    
-                    scale = einstein_tongue.shape[0] / einstein_tongue.shape[1]
+            
+                    scale = (
+                        einstein_tongue.shape[0]
+                        / einstein_tongue.shape[1]
+                    )
+            
                     tongue_h = int(tongue_w * scale)
-    
-                    tongue_x = int(lower_lip.x * w - tongue_w / 2)
-                    tongue_y = int(lower_lip.y * h)
-    
+            
+                    tongue_x = int(
+                        lower_lip.x * w
+                        - tongue_w / 2
+                    )
+            
+                    tongue_y = int(
+                        lower_lip.y * h
+                        + tongue_h * 0.05
+                    )
+            
                     img = overlay_image(
                         img,
                         einstein_tongue,
