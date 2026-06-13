@@ -131,7 +131,7 @@ class VideoProcessor:
                         * w
                     )
                     
-                    tongue_w = int(mouth_width * 2.8)
+                    tongue_w = int(mouth_width * 0.4)
             
                     scale = (
                         einstein_tongue.shape[0]
