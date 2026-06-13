@@ -147,7 +147,7 @@ class VideoProcessor:
                     #eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
                     tongue_y = int(
                         lower_lip.y * h
-                        + tongue_h * 0.0001
+                        - tongue_h * 0.5
                     )
             
                     img = overlay_image(
