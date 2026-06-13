@@ -94,7 +94,7 @@ class VideoProcessor:
             
                     face_width = abs(right_face.x - left_face.x) * w
             
-                    hair_w = int(face_width * 1.5)
+                    hair_w = int(face_width * 2)
             
                     scale = (
                         einstein_hair.shape[0]
@@ -109,7 +109,7 @@ class VideoProcessor:
                     
                     hair_y = int(
                         forehead.y * h
-                        - hair_h * 0.75
+                        - hair_h * 0.5
                     )
             
                     img = overlay_image(
@@ -147,7 +147,7 @@ class VideoProcessor:
                     #eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
                     tongue_y = int(
                         lower_lip.y * h
-                        + tongue_h * 0.5
+                        + tongue_h * 5
                     )
             
                     img = overlay_image(
