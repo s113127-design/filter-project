@@ -109,7 +109,7 @@ class VideoProcessor:
                     
                     hair_y = int(
                         forehead.y * h
-                        - hair_h * 0.5
+                        - hair_h * 0.4
                     )
             
                     img = overlay_image(
