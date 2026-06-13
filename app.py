@@ -95,13 +95,29 @@ class VideoProcessor:
                     img = overlay_image(img, einstein_hair, hair_x, hair_y, size=(hair_w, hair_h))
                 
                 # P上舌頭
+                # P上舌頭
                 if einstein_tongue is not None:
-                    tongue_w = int(face_height * 0.5)
+
+                    left_mouth = face_landmarks[61]
+                    right_mouth = face_landmarks[291]
+    
+                    mouth_width = abs(right_mouth.x - left_mouth.x) * w
+    
+                    tongue_w = int(mouth_width * 1.8)
+    
                     scale = einstein_tongue.shape[0] / einstein_tongue.shape[1]
                     tongue_h = int(tongue_w * scale)
+    
                     tongue_x = int(lower_lip.x * w - tongue_w / 2)
-                    tongue_y = int(lower_lip.y * h - tongue_h * 0.1)
-                    img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
+                    tongue_y = int(lower_lip.y * h)
+    
+                    img = overlay_image(
+                        img,
+                        einstein_tongue,
+                        tongue_x,
+                        tongue_y,
+                        size=(tongue_w, tongue_h)
+                    )
 
         cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         self.latest_filter = img.copy()
