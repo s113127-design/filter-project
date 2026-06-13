@@ -94,7 +94,7 @@ class VideoProcessor:
             
                     face_width = abs(right_face.x - left_face.x) * w
             
-                    hair_w = int(face_width * 1.7)
+                    hair_w = int(face_width * 1.75)
             
                     scale = (
                         einstein_hair.shape[0]
