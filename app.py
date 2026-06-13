@@ -202,3 +202,39 @@ class VideoProcessor:
 
 # --- 網頁畫面佈局 ---
 ctx = webrtc_streamer(
+    key="auto-meme-filter", 
+    video_processor_factory=VideoProcessor,
+    media_stream_constraints={"video": True, "audio": False},
+    rtc_configuration={"iceServers": [{"urls": ["stun:://google.com"]}]}
+)
+
+if st.button("📸 Capture (拍照)", use_container_width=True):
+    if ctx.video_processor and ctx.video_processor.latest_orig is not None:
+        orig_rgb = cv2.cvtColor(ctx.video_processor.latest_orig, cv2.COLOR_BGR2RGB)
+        filter_rgb = cv2.cvtColor(ctx.video_processor.latest_filter, cv2.COLOR_BGR2RGB)
+        st.session_state.history.insert(0, (orig_rgb, filter_rgb))
+        st.success("拍照成功！已加到下方紀錄中。")
+    else:
+        st.warning("請先點擊 START 開啟鏡頭再拍照喔！")
+
+st.markdown("---")
+
+if st.session_state.history:
+    st.subheader("🖼️ 剛剛拍到的影像")
+    current_orig, current_filter = st.session_state.history[0]
+    
+    col_orig, col_filt = st.columns(2)
+    with col_orig:
+        st.image(current_orig, caption="拍到的原影像", use_container_width=True)
+    with col_filt:
+        st.image(current_filter, caption="加上濾鏡後的影相", use_container_width=True)
+
+    st.markdown("---")
+
+    st.subheader("📜 歷史拍照紀錄")
+    cols = st.columns(max(5, len(st.session_state.history)))
+    for idx, (orig, filt) in enumerate(st.session_state.history):
+        if idx < 5:
+            with cols[idx]:
+                st.image(filt, caption= f"紀錄 #{len(st.session_state.history)-idx}", use_container_width=True)
+
