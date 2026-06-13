@@ -103,7 +103,7 @@ class VideoProcessor:
             
                     hair_h = int(hair_w * scale)
             
-                    hair_x = int(forehead.x * w - hair_w / 2.2)
+                    hair_x = int(forehead.x * w - hair_w / 2.5)
                     
                     #eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
                     
