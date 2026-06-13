@@ -64,45 +64,43 @@ class VideoProcessor:
         status_text = "Scanning... Make a gesture!"
         
         if face_results.multi_face_landmarks:
-            # 💡 關鍵修正：必須精確拿到第一張臉的點位陣列 [0]
+            # 💡 【終極修正】：補上了 [0]，這才是真正拿到第一張臉！
             face_landmarks = face_results.multi_face_landmarks[0]
             
-            # MediaPipe Face Mesh 特定的精確點位索引
-            upper_lip = face_landmarks.landmark[13]   # 上嘴唇內側
-            lower_lip = face_landmarks.landmark[14]   # 下嘴唇內側
-            forehead = face_landmarks.landmark[10]    # 額頭頂端
-            chin = face_landmarks.landmark[152]       # 下巴底端
+            # 抓取人臉核心點位
+            upper_lip = face_landmarks.landmark[13]
+            lower_lip = face_landmarks.landmark[14]
+            forehead = face_landmarks.landmark[10]
+            chin = face_landmarks.landmark[152]
             
-            # 計算臉部基準高度
+            # 計算臉的高度與張嘴距離
             face_height = abs(forehead.y - chin.y) * h
-            
-            # 計算張嘴實際像素距離
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             
-            # 💡 判斷張開嘴巴 (當嘴唇距離大於臉部高度的 15%)
-            if lip_dist > (face_height * 0.15):
+            # 當張嘴距離大於臉部高度的 12% 
+            if lip_dist > (face_height * 0.12):
                 status_text = "ACTIVE: Einstein Mode"
                 
-                # 畫面轉黑白特效
+                # 特效變黑白
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
                 
-                # P上頭髮（根據臉部高度動態縮放大小）
+                # P上頭髮
                 if einstein_hair is not None:
-                    hair_w = int(face_height * 2.2)
+                    hair_w = int(face_height * 2.3)
                     scale = einstein_hair.shape[0] / einstein_hair.shape[1]
                     hair_h = int(hair_w * scale)
                     hair_x = int(forehead.x * w - hair_w / 2)
-                    hair_y = int(forehead.y * h - hair_h * 0.7)  # 覆蓋額頭上方
+                    hair_y = int(forehead.y * h - hair_h * 0.85) # 正確戴在頭頂
                     img = overlay_image(img, einstein_hair, hair_x, hair_y, size=(hair_w, hair_h))
                 
-                # P上舌頭（根據張嘴大小動態縮放大小）
+                # P上舌頭
                 if einstein_tongue is not None:
-                    tongue_w = int(face_height * 0.6)  # 舌頭寬度大約固定為臉寬的一半左右
+                    tongue_w = int(face_height * 0.5)
                     scale = einstein_tongue.shape[0] / einstein_tongue.shape[1]
                     tongue_h = int(tongue_w * scale)
                     tongue_x = int(lower_lip.x * w - tongue_w / 2)
-                    tongue_y = int(lower_lip.y * h - tongue_h * 0.1)  # 黏在下嘴唇下方
+                    tongue_y = int(lower_lip.y * h - tongue_h * 0.1) # 正確在下唇上
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
 
         cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
