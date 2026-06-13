@@ -38,7 +38,7 @@ def overlay_image(background, overlay, x, y, size=None):
         alpha = crop_overlay[:, :, 3] / 255.0
         alpha = np.expand_dims(alpha, axis=2)
         composite = crop_overlay[:, :, :3] * alpha + crop_bg * (1 - alpha)
-        background[y1:y2, x1:x2] = composite
+        background[y1:y2, x1:x2] = composite.astype(np.uint8)
     else:
         background[y1:y2, x1:x2] = crop_overlay[:, :, :3]
     return background
@@ -74,9 +74,11 @@ class VideoProcessor:
             forehead = face_landmarks.landmark[10]
             chin = face_landmarks.landmark[152]
             
-            # 計算距離
-            lip_dist = abs(upper_lip.y - lower_lip.y) * h
+            # 計算臉部基準高度
             face_height = abs(forehead.y - chin.y) * h
+            
+            # 計算張嘴程度
+            lip_dist = abs(upper_lip.y - lower_lip.y) * h
             
             # 💡 判斷張開嘴巴
             if lip_dist > (face_height * 0.15):
@@ -86,22 +88,22 @@ class VideoProcessor:
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
                 
-                # P上頭髮
+                # P上頭髮（根據臉部高度動態縮放大小）
                 if einstein_hair is not None:
-                    hair_w = int(face_height * 1.8)
+                    hair_w = int(face_height * 2.5)  # 放大頭髮寬度
                     scale = einstein_hair.shape[0] / einstein_hair.shape[1]
                     hair_h = int(hair_w * scale)
                     hair_x = int(forehead.x * w - hair_w / 2)
-                    hair_y = int(forehead.y * h - hair_h * 0.75)
+                    hair_y = int(forehead.y * h - hair_h * 0.8)  # 往上移一點蓋住頭頂
                     img = overlay_image(img, einstein_hair, hair_x, hair_y, size=(hair_w, hair_h))
                 
-                # P上舌頭
+                # P上舌頭（根據張嘴大小動態縮放大小）
                 if einstein_tongue is not None:
-                    tongue_w = int(face_height * 0.5)
+                    tongue_w = int(lip_dist * 2.5)  # 根據你嘴巴張開的大小動態變大！
                     scale = einstein_tongue.shape[0] / einstein_tongue.shape[1]
                     tongue_h = int(tongue_w * scale)
                     tongue_x = int(lower_lip.x * w - tongue_w / 2)
-                    tongue_y = int(lower_lip.y * h)
+                    tongue_y = int(lower_lip.y * h - tongue_h * 0.2)  # 對齊下嘴唇
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
 
         cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
@@ -144,5 +146,4 @@ if st.session_state.history:
     for idx, (orig, filt) in enumerate(st.session_state.history):
         col_idx = idx % 4
         with cols[col_idx]:
-            # 💡 這裡拿掉了 caption 文字，讓畫面保持乾淨
             st.image(filt, use_container_width=True)
