@@ -135,14 +135,15 @@ class VideoProcessor:
             ring_tip = hand_landmarks.landmark[16]
             pinky_tip = hand_landmarks.landmark[20]
             
-            # 判斷是左手還是右手 (用來確認手心方向)
-            # MediaPipe 預設有些鏡像，我們用最簡單的相對位置判斷
-            
             # 💡 【秦始皇模式】：比讚 (大拇指朝上，食指低於指節)
             if thumb_tip.y < thumb_ip.y and index_tip.y > index_mcp.y:
                 status_text = "ACTIVE: Qin Shihuang Mode"
                 mode_triggered = True
                 if face_results.multi_face_landmarks:
+                    face_landmarks = face_results.multi_face_landmarks[0]
+                    forehead = face_landmarks.landmark[10]
+                    chin = face_landmarks.landmark[152]
+                    face_height = abs(forehead.y - chin.y) * h
                     # P 上秦始皇帽子
                     if qin_cap is not None:
                         hat_w = int(face_height * 1.8)
@@ -155,11 +156,14 @@ class VideoProcessor:
                     img = overlay_image(img, polar_bear, int(thumb_tip.x * w - bear_w / 2), int(thumb_tip.y * h - bear_h - 10), size=(bear_w, bear_h))
 
             # 💡 【孔子模式】：手心朝自己、手攤平不做動作
-            # 攤平判斷：食、中、無名、小指的指尖都高於大拇指，且手指伸直
             elif index_tip.y < index_mcp.y and middle_tip.y < index_mcp.y and ring_tip.y < index_mcp.y:
                 status_text = "ACTIVE: Confucius Mode"
                 mode_triggered = True
                 if face_results.multi_face_landmarks:
+                    face_landmarks = face_results.multi_face_landmarks[0]
+                    forehead = face_landmarks.landmark[10]
+                    chin = face_landmarks.landmark[152]
+                    face_height = abs(forehead.y - chin.y) * h
                     # P 上孔子帽子
                     if kongzi_cap is not None:
                         hat_w = int(face_height * 1.6)
@@ -200,20 +204,33 @@ class VideoProcessor:
         self.latest_filter = img.copy()
         return frame.from_ndarray(img, format="bgr24")
 
-# --- 網頁畫面佈局 ---
+                    
+# --- 網頁畫面佈局 (從這裡開始複製) ---
+
 ctx = webrtc_streamer(
-    key="auto-meme-filter", 
+    key="auto-meme-filter",
     video_processor_factory=VideoProcessor,
-    media_stream_constraints={"video": True, "audio": False},
+    media_stream_constraints={
+        "video": True, 
+        "audio": False
+    },
     rtc_configuration={
-        "iceServers": [{"urls": ["stun:://google.com"]}]
+        "iceServers": [{
+            "urls": ["stun:://google.com"]
+        }]
     }
 )
 
 if st.button("📸 Capture (拍照)", use_container_width=True):
     if ctx.video_processor and ctx.video_processor.latest_orig is not None:
-        orig_rgb = cv2.cvtColor(ctx.video_processor.latest_orig, cv2.COLOR_BGR2RGB)
-        filter_rgb = cv2.cvtColor(ctx.video_processor.latest_filter, cv2.COLOR_BGR2RGB)
+        orig_rgb = cv2.cvtColor(
+            ctx.video_processor.latest_orig, 
+            cv2.COLOR_BGR2RGB
+        )
+        filter_rgb = cv2.cvtColor(
+            ctx.video_processor.latest_filter, 
+            cv2.COLOR_BGR2RGB
+        )
         st.session_state.history.insert(0, (orig_rgb, filter_rgb))
         st.success("拍照成功！已加到下方紀錄中。")
     else:
@@ -227,16 +244,28 @@ if st.session_state.history:
     
     col_orig, col_filt = st.columns(2)
     with col_orig:
-        st.image(current_orig, caption="拍到的原影像", use_container_width=True)
+        st.image(
+            current_orig, 
+            caption="拍到的原影像", 
+            use_container_width=True
+        )
     with col_filt:
-        st.image(current_filter, caption="加上濾鏡後的影相", use_container_width=True)
+        st.image(
+            current_filter, 
+            caption="加上濾鏡後的影相", 
+            use_container_width=True
+        )
 
     st.markdown("---")
 
     st.subheader("📜 歷史拍照紀錄")
-    cols = st.columns(max(5, len(st.session_state.history)))
+    num_hist = len(st.session_state.history)
+    cols = st.columns(max(5, num_hist))
     for idx, (orig, filt) in enumerate(st.session_state.history):
         if idx < 5:
             with cols[idx]:
-                st.image(filt, caption= f"紀錄 #{len(st.session_state.history)-idx}", use_container_width=True)
-
+                st.image(
+                    filt, 
+                    caption=f"紀錄 #{num_hist-idx}", 
+                    use_container_width=True
+                )
