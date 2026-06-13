@@ -109,7 +109,7 @@ class VideoProcessor:
                     
                     hair_y = int(
                         forehead.y * h
-                        - hair_h * 2
+                        - hair_h * 0.3
                     )
             
                     img = overlay_image(
@@ -147,7 +147,7 @@ class VideoProcessor:
                     #eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
                     tongue_y = int(
                         lower_lip.y * h
-                        + tongue_h * 3
+                        + tongue_h * 0.3
                     )
             
                     img = overlay_image(
