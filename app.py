@@ -12,14 +12,12 @@ if "history" not in st.session_state:
 
 @st.cache_data
 def load_resources():
-    # 讀取愛因斯坦需要的貼圖
     e_hair = cv2.imread("assets/Einstein hair.png", cv2.IMREAD_UNCHANGED)
     e_tongue = cv2.imread("assets/Einstein tongue.png", cv2.IMREAD_UNCHANGED)
     return e_hair, e_tongue
 
 einstein_hair, einstein_tongue = load_resources()
 
-# P圖專用的疊加函式（支援透明通道）
 def overlay_image(background, overlay, x, y, size=None):
     if overlay is None: return background
     bg_h, bg_w = background.shape[:2]
@@ -66,21 +64,22 @@ class VideoProcessor:
         status_text = "Scanning... Make a gesture!"
         
         if face_results.multi_face_landmarks:
+            # 💡 關鍵修正：必須精確拿到第一張臉的點位陣列 [0]
             face_landmarks = face_results.multi_face_landmarks[0]
             
-            # 取出嘴唇與臉部點位
-            upper_lip = face_landmarks.landmark[13]
-            lower_lip = face_landmarks.landmark[14]
-            forehead = face_landmarks.landmark[10]
-            chin = face_landmarks.landmark[152]
+            # MediaPipe Face Mesh 特定的精確點位索引
+            upper_lip = face_landmarks.landmark[13]   # 上嘴唇內側
+            lower_lip = face_landmarks.landmark[14]   # 下嘴唇內側
+            forehead = face_landmarks.landmark[10]    # 額頭頂端
+            chin = face_landmarks.landmark[152]       # 下巴底端
             
             # 計算臉部基準高度
             face_height = abs(forehead.y - chin.y) * h
             
-            # 計算張嘴程度
+            # 計算張嘴實際像素距離
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             
-            # 💡 判斷張開嘴巴
+            # 💡 判斷張開嘴巴 (當嘴唇距離大於臉部高度的 15%)
             if lip_dist > (face_height * 0.15):
                 status_text = "ACTIVE: Einstein Mode"
                 
@@ -90,20 +89,20 @@ class VideoProcessor:
                 
                 # P上頭髮（根據臉部高度動態縮放大小）
                 if einstein_hair is not None:
-                    hair_w = int(face_height * 2.5)  # 放大頭髮寬度
+                    hair_w = int(face_height * 2.2)
                     scale = einstein_hair.shape[0] / einstein_hair.shape[1]
                     hair_h = int(hair_w * scale)
                     hair_x = int(forehead.x * w - hair_w / 2)
-                    hair_y = int(forehead.y * h - hair_h * 0.8)  # 往上移一點蓋住頭頂
+                    hair_y = int(forehead.y * h - hair_h * 0.7)  # 覆蓋額頭上方
                     img = overlay_image(img, einstein_hair, hair_x, hair_y, size=(hair_w, hair_h))
                 
                 # P上舌頭（根據張嘴大小動態縮放大小）
                 if einstein_tongue is not None:
-                    tongue_w = int(lip_dist * 2.5)  # 根據你嘴巴張開的大小動態變大！
+                    tongue_w = int(face_height * 0.6)  # 舌頭寬度大約固定為臉寬的一半左右
                     scale = einstein_tongue.shape[0] / einstein_tongue.shape[1]
                     tongue_h = int(tongue_w * scale)
                     tongue_x = int(lower_lip.x * w - tongue_w / 2)
-                    tongue_y = int(lower_lip.y * h - tongue_h * 0.2)  # 對齊下嘴唇
+                    tongue_y = int(lower_lip.y * h - tongue_h * 0.1)  # 黏在下嘴唇下方
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
 
         cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
