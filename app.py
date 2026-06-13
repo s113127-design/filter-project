@@ -13,7 +13,7 @@ if "history" not in st.session_state:
 @st.cache_data
 def load_resources():
     e_hair = cv2.imread("assets/Einstein_hair.png", cv2.IMREAD_UNCHANGED)
-    e_tongue = cv2.imread("Einstein_tongue.png", cv2.IMREAD_UNCHANGED)
+    e_tongue = cv2.imread("assets/Einstein_tongue.png", cv2.IMREAD_UNCHANGED)
     return e_hair, e_tongue
 
 einstein_hair, einstein_tongue = load_resources()
