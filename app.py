@@ -205,7 +205,9 @@ ctx = webrtc_streamer(
     key="auto-meme-filter", 
     video_processor_factory=VideoProcessor,
     media_stream_constraints={"video": True, "audio": False},
-    rtc_configuration={"iceServers": [{"urls": ["stun:://google.com"]}]}
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:://google.com"]}]
+    }
 )
 
 if st.button("📸 Capture (拍照)", use_container_width=True):
