@@ -238,7 +238,7 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
                     tomato_h = int(tomato_w * tomato_scale)
                     tomato_x = center_x - int(tomato_w / 2)
                     tomato_y = center_y - int(tomato_h / 2)
-                    filter_img = overlay_image(filter_img, louis_tomato, tomato_x, tomato_y, size=(tomato_w, tomato_h))
+                    filter_img = overlay_image(filter_img, louis_tomato, x=tomato_x, y=tomato_y, size=(int(tomato_w), int(tomato_h)))
         
         orig_rgb = cv2.cvtColor(orig_img, cv2.COLOR_BGR2RGB)
         filter_rgb = cv2.cvtColor(filter_img, cv2.COLOR_BGR2RGB)
