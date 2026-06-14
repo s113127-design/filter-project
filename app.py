@@ -95,7 +95,7 @@ class VideoProcessor:
         self.is_qin_active = False
         self.is_buddha_active = False # 每影格重新偵測時先歸零
         
-# ─── 手勢判定：秦始皇(比讚) 與 孔子(手心朝內攤平) ───
+        # ─── 手勢判定：秦始皇(比讚) 與 孔子(手心朝內攤平) ───
         if hand_results.multi_hand_landmarks:
             hand_landmarks = hand_results.multi_hand_landmarks[0].landmark
             
@@ -109,19 +109,33 @@ class VideoProcessor:
             # 1. 秦始皇手勢：大拇指朝上，其餘四指握拳
             if thumb_is_up and not index_is_straight and not middle_is_straight and not ring_is_straight and not pinky_is_straight:
                 self.is_qin_active = True
+                self.is_kongzi_active = False # 🎯 確保此時關閉孔子
                 
             # 2. 孔子手勢：五指全部伸直攤平，且判定手心朝向自己
-            # 利用 MediaPipe 的左右手標籤資訊 (multi_handedness) 搭配大拇指和小指的 X 軸相對位置
-            # 如果是右手，手心朝內時大拇指(4)在小指(20)的右邊 (4.x > 20.x)；左手則相反
             elif thumb_is_up and index_is_straight and middle_is_straight and ring_is_straight and pinky_is_straight:
+                self.is_qin_active = False # 🎯 確保此時關閉秦始皇
                 handedness = hand_results.multi_handedness[0].classification[0].label
                 # 因為鏡頭是左右鏡像的，MediaPipe 偵測到的 Left/Right 會跟實體相反
                 if handedness == "Left": # 畫面的右邊
                     if hand_landmarks[4].x > hand_landmarks[20].x:
                         self.is_kongzi_active = True
+                    else:
+                        self.is_kongzi_active = False # 🎯 補上：不符手心朝內時關閉
                 else: # 畫面的左邊
                     if hand_landmarks[4].x < hand_landmarks[20].x:
                         self.is_kongzi_active = True
+                    else:
+                        self.is_kongzi_active = False # 🎯 補上：不符手心朝內時關閉
+            
+            else:
+                # 🎯 補上：如果手伸出來，但既不是比讚也不是孔子手勢，兩者都要關閉
+                self.is_qin_active = False
+                self.is_kongzi_active = False
+                
+        else:
+            # 🎯 補上：如果畫面中完全沒有手，兩者也都要立刻關閉
+            self.is_qin_active = False
+            self.is_kongzi_active = False
 
         # ─── 步驟二：處理人臉與濾鏡疊加 ───
         if face_results.multi_face_landmarks:
