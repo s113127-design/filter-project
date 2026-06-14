@@ -259,7 +259,7 @@ if st.session_state.history:
     with col_orig:
         st.image(current_orig, caption="拍到的原影像", use_container_width=True)
     with col_filt:
-        st.image(current_filter, caption="濾鏡影像（路易十六模式會在這加上番茄）", use_container_width=True)
+        st.image(current_filter, caption="濾鏡影像", use_container_width=True)
 
     st.markdown("---")
     st.subheader("📜 歷史拍照紀錄 (最多儲存 8 張)")
