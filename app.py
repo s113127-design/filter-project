@@ -234,7 +234,7 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
                 
                 if louis_tomato is not None:
                     tomato_scale = louis_tomato.shape[0] / louis_tomato.shape[1]
-                    tomato_w = face_size*1.5
+                    tomato_w = face_size
                     tomato_h = int(tomato_w * tomato_scale)
                     tomato_x = center_x - int(tomato_w / 2)
                     tomato_y = center_y - int(tomato_h / 2)
