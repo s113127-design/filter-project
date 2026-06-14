@@ -203,7 +203,8 @@ ctx = webrtc_streamer(
     media_stream_constraints={"video": True, "audio": False}
 )
 
-if st.button("📸 Capture (拍照)", width="stretch"):
+# 修正：st.button 的填滿參數應為 use_container_width=True
+if st.button("📸 Capture (拍照)", use_container_width=True):
     if ctx.video_processor and ctx.video_processor.latest_orig is not None:
         orig_img = ctx.video_processor.latest_orig.copy()
         filter_img = ctx.video_processor.latest_filter.copy()
@@ -250,8 +251,10 @@ if st.session_state.history:
     current_orig, current_filter = st.session_state.history[0]
     col_orig, col_filt = st.columns(2)
     with col_orig:
+        # 修正：新版 st.image 使用 width="stretch"
         st.image(current_orig, caption="拍到的原影像", width="stretch")
     with col_filt:
+        # 修正：新版 st.image 使用 width="stretch"
         st.image(current_filter, caption="濾鏡影像", width="stretch")
 
     st.markdown("---")
@@ -261,4 +264,5 @@ if st.session_state.history:
     for idx, (orig, filt) in enumerate(st.session_state.history):
         col_idx = idx % 4
         with cols[col_idx]:
+            # 修正：新版 st.image 使用 width="stretch"
             st.image(filt, width="stretch")
