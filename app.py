@@ -85,6 +85,7 @@ class VideoProcessor:
         status_text = "Scanning... Make a gesture!"
         self.is_einstein_active = False
         self.is_qin_active = False
+        self.is_buddha_active = False # 每影格重新偵測時先歸零
         
         # ─── 步驟一：先判定手勢是否「比讚」───
         if hand_results.multi_hand_landmarks:
@@ -213,8 +214,10 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
         orig_img = ctx.video_processor.latest_orig.copy()
         filter_img = ctx.video_processor.latest_filter.copy()
         
-        # ─── 拍照邏輯：只有在「非秦始皇」且「非愛因斯坦」時，才觸發路易十六（番茄頭） ───
-        if not ctx.video_processor.is_qin_active and not ctx.video_processor.is_einstein_active:
+        # 🎯 拍照修正邏輯：只有在「非佛祖」、「非秦始皇」、「非愛因斯坦」三者皆非時，才觸發路易十六番茄頭！
+        if (not ctx.video_processor.is_buddha_active and 
+            not ctx.video_processor.is_qin_active and 
+            not ctx.video_processor.is_einstein_active):
             h, w, _ = orig_img.shape
             rgb_img = cv2.cvtColor(orig_img, cv2.COLOR_BGR2RGB)
             face_results = ctx.video_processor.face_mesh.process(rgb_img)
