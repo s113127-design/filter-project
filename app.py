@@ -122,7 +122,7 @@ class VideoProcessor:
                     cap_h = int(cap_w * cap_scale)
                     
                     cap_x = int(forehead.x * w - cap_w / 2)
-                    cap_y = int(forehead.y * h - cap_h * 0.5) # 帽簷蓋到額頭上方
+                    cap_y = int(forehead.y * h - cap_h * 0.3) # 帽簷蓋到額頭上方
                     img = overlay_image(img, qin_cap, cap_x, cap_y, size=(cap_w, cap_h))
                 
                 # B. P 上北極熊在畫面最下方中間 (polar_bear.png)
