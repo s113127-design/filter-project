@@ -5,7 +5,11 @@ import mediapipe as mp
 import numpy as np
 
 st.title("像個偉(偽)人一樣 📸")
-st.write("👉 做出表情或手勢來變身！\n- 張開嘴巴：變身【愛因斯坦】（即時生效）\n- 對鏡頭比讚 👍：變身【秦始皇】（即時戴帽子＋下方北極熊）\n- 直接拍照（不做動作）：拍下後變身【路易十六】（頭變番茄）")
+st.write("👉 做出表情或手勢來變身！\n"
+         "- 閉上雙眼 👁️❌：變身【釋迦牟尼佛】（即時頭頂發光）\n"
+         "- 對鏡頭比讚 👍：變身【秦始皇】（即時戴帽子＋下方北極熊）\n"
+         "- 張開嘴巴 😮：變身【愛因斯坦】（即時畫面轉黑白＋爆炸頭吐舌）\n"
+         "- 直接拍照（不動作）：拍下後變身【路易十六】（頭變番茄）")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -15,12 +19,12 @@ def load_resources():
     e_hair = cv2.imread("assets/Einstein_hair.png", cv2.IMREAD_UNCHANGED)
     e_tongue = cv2.imread("assets/Einstein_tongue.png", cv2.IMREAD_UNCHANGED)
     tomato = cv2.imread("assets/tomato.png", cv2.IMREAD_UNCHANGED)
-    # ─── 新增：載入秦始皇與北極熊素材 ───
     q_cap = cv2.imread("assets/qinshihuang_cap.png", cv2.IMREAD_UNCHANGED)
     p_bear = cv2.imread("assets/polar_bear.png", cv2.IMREAD_UNCHANGED)
-    return e_hair, e_tongue, tomato, q_cap, p_bear
+    h_light = cv2.imread("assets/holy_light.png", cv2.IMREAD_UNCHANGED)
+    return e_hair, e_tongue, tomato, q_cap, p_bear, h_light
 
-einstein_hair, einstein_tongue, louis_tomato, qin_cap, polar_bear = load_resources()
+einstein_hair, einstein_tongue, louis_tomato, qin_cap, polar_bear, holy_light = load_resources()
 
 def overlay_image(background, overlay, x, y, size=None):
     if overlay is None: return background
@@ -64,6 +68,8 @@ class VideoProcessor:
         self.latest_filter = None
         self.is_einstein_active = False
         self.is_qin_active = False # 紀錄拍照瞬間是不是秦始皇狀態
+        self.is_buddha_active = False # ─── 新增：紀錄拍照瞬間是不是佛祖狀態 ───
+
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -107,7 +113,29 @@ class VideoProcessor:
             face_height = abs(forehead.y - chin.y) * h
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             
-            # 優先級 1：如果比讚 -> 觸發【秦始皇模式】
+              # ─── 新增：計算閉眼縱橫比點位 ───
+            left_eye_dist = abs(face_landmarks[159].y - face_landmarks[145].y) * h
+            right_eye_dist = abs(face_landmarks[386].y - face_landmarks[374].y) * h
+            
+            # 優先級 1：如果兩眼垂直距離小於人臉高度的 1.5% -> 觸發【釋迦牟尼佛模式】
+            if left_eye_dist < (face_height * 0.015) and right_eye_dist < (face_height * 0.015):
+                self.is_buddha_active = True
+                status_text = "ACTIVE: Shakyamuni Buddha Mode 🪷"
+                
+                if holy_light is not None:
+                    left_face = face_landmarks[234]
+                    right_face = face_landmarks[454]
+                    face_width = abs(right_face.x - left_face.x) * w
+                    
+                    light_w = int(face_width * 2.2) # 聖光寬度放大
+                    light_scale = holy_light.shape[0] / holy_light.shape[1]
+                    light_h = int(light_w * light_scale)
+                    
+                    light_x = int(forehead.x * w - light_w / 2)
+                    light_y = int(forehead.y * h - light_h * 0.65) # 置中偏頭頂上方
+                    img = overlay_image(img, holy_light, light_x, light_y, size=(light_w, light_h))
+
+            # 優先級 2：如果比讚 -> 觸發【秦始皇模式】
             if self.is_qin_active:
                 status_text = "ACTIVE: Qin Shi Huang Mode 👍"
                 
