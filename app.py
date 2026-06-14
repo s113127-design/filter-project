@@ -70,6 +70,7 @@ class VideoProcessor:
         self.is_qin_active = False 
         self.is_buddha_active = False 
 
+
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         self.latest_orig = img.copy()
@@ -188,16 +189,15 @@ class VideoProcessor:
         self.latest_filter = img.copy()
         return frame.from_ndarray(img, format="bgr24")
 
-# --- 💡 新增：雲端 WebRTC 防斷線 STUN 設定 ---
+# --- 🚀 關鍵修正：加入雲端專用 WebRTC 伺服器設定 ---
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-# --- 網頁畫面佈局 ---
 ctx = webrtc_streamer(
     key="camera-step-by-step",
     video_processor_factory=VideoProcessor,
-    rtc_configuration=RTC_CONFIGURATION, # 套用 STUN 設定
+    rtc_configuration=RTC_CONFIGURATION, # 填入 STUN 設定，確保雲端連線成功
     media_stream_constraints={"video": True, "audio": False}
 )
 
