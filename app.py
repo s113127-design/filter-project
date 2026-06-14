@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer
+from streamlit_webrtc import webrtc_streamer, RTCConfiguration
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -50,7 +50,7 @@ def overlay_image(background, overlay, x, y, size=None):
     return background
 
 mp_face_mesh = mp.solutions.face_mesh
-mp_hands = mp.solutions.hands  # ─── 新增：手部偵測模組 ───
+mp_hands = mp.solutions.hands  
 
 class VideoProcessor:
     def __init__(self):
@@ -67,8 +67,8 @@ class VideoProcessor:
         self.latest_orig = None
         self.latest_filter = None
         self.is_einstein_active = False
-        self.is_qin_active = False # 紀錄拍照瞬間是不是秦始皇狀態
-        self.is_buddha_active = False # ─── 新增：紀錄拍照瞬間是不是佛祖狀態 ───
+        self.is_qin_active = False 
+        self.is_buddha_active = False 
 
 
     def recv(self, frame):
@@ -78,21 +78,17 @@ class VideoProcessor:
         h, w, _ = img.shape
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # 進行 AI 辨識
         face_results = self.face_mesh.process(rgb_img)
         hand_results = self.hands.process(rgb_img)
         
         status_text = "Scanning... Make a gesture!"
         self.is_einstein_active = False
         self.is_qin_active = False
-        self.is_buddha_active = False # 每影格重新偵測時先歸零
+        self.is_buddha_active = False 
         
-        # ─── 步驟一：先判定手勢是否「比讚」───
         if hand_results.multi_hand_landmarks:
             hand_landmarks = hand_results.multi_hand_landmarks[0].landmark
             
-            # 比讚演算法：大拇指尖(4) 高於 大拇指根部(2)，且其餘四指(8, 12, 16, 20)皆收起（其指尖低於關節）
-            # 由於網頁視訊 Y 軸朝下，指尖 Y 小於關節 Y 代表指尖在上。
             thumb_is_up = hand_landmarks[4].y < hand_landmarks[2].y
             index_is_closed = hand_landmarks[8].y > hand_landmarks[6].y
             middle_is_closed = hand_landmarks[12].y > hand_landmarks[10].y
@@ -102,7 +98,6 @@ class VideoProcessor:
             if thumb_is_up and index_is_closed and middle_is_closed and ring_is_closed and pinky_is_closed:
                 self.is_qin_active = True
 
-        # ─── 步驟二：處理人臉與濾鏡疊加 ───
         if face_results.multi_face_landmarks:
             face_landmarks = face_results.multi_face_landmarks[0].landmark
             
@@ -114,11 +109,9 @@ class VideoProcessor:
             face_height = abs(forehead.y - chin.y) * h
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             
-              # ─── 新增：計算閉眼縱橫比點位 ───
             left_eye_dist = abs(face_landmarks[159].y - face_landmarks[145].y) * h
             right_eye_dist = abs(face_landmarks[386].y - face_landmarks[374].y) * h
             
-            # 優先級 1：如果兩眼垂直距離小於人臉高度的 1.5% -> 觸發【釋迦牟尼佛模式】
             if left_eye_dist < (face_height * 0.015) and right_eye_dist < (face_height * 0.015):
                 self.is_buddha_active = True
                 status_text = "ACTIVE: Shakyamuni Buddha Mode 🪷"
@@ -128,43 +121,39 @@ class VideoProcessor:
                     right_face = face_landmarks[454]
                     face_width = abs(right_face.x - left_face.x) * w
                     
-                    light_w = int(face_width * 2.2) # 聖光寬度放大
+                    light_w = int(face_width * 2.2) 
                     light_scale = holy_light.shape[0] / holy_light.shape[1]
                     light_h = int(light_w * light_scale)
                     
                     light_x = int(forehead.x * w - light_w / 2)
-                    light_y = int(forehead.y * h - light_h * 0.65) # 置中偏頭頂上方
+                    light_y = int(forehead.y * h - light_h * 0.65) 
                     img = overlay_image(img, holy_light, light_x, light_y, size=(light_w, light_h))
 
-            # 優先級 2：如果比讚 -> 觸發【秦始皇模式】
             elif self.is_qin_active:
                 status_text = "ACTIVE: Qin Shi Huang Mode 👍"
                 
-                # A. P 上秦始皇帽子 (qinshihuang_cap.png)
                 if qin_cap is not None:
                     left_face = face_landmarks[234]
                     right_face = face_landmarks[454]
                     face_width = abs(right_face.x - left_face.x) * w
                     
-                    cap_w = int(face_width * 4.0)  # 冕冠通常比較寬大
+                    cap_w = int(face_width * 4.0)  
                     cap_scale = qin_cap.shape[0] / qin_cap.shape[1]
                     cap_h = int(cap_w * cap_scale)
                     
                     cap_x = int(forehead.x * w - cap_w / 2.05)
-                    cap_y = int(forehead.y * h - cap_h * 0.3) # 帽簷蓋到額頭上方
+                    cap_y = int(forehead.y * h - cap_h * 0.3) 
                     img = overlay_image(img, qin_cap, cap_x, cap_y, size=(cap_w, cap_h))
                 
-                # B. P 上北極熊在畫面最下方中間 (polar_bear.png)
                 if polar_bear is not None:
-                    bear_w = int(w * 0.35)  # 佔據畫面底部約 35% 寬度
+                    bear_w = int(w * 0.35)  
                     bear_scale = polar_bear.shape[0] / polar_bear.shape[1]
                     bear_h = int(bear_w * bear_scale)
                     
-                    bear_x = int(w / 2 - bear_w / 2)  # 置中
-                    bear_y = h - bear_h               # 貼齊最下方
+                    bear_x = int(w / 2 - bear_w / 2)  
+                    bear_y = h - bear_h               
                     img = overlay_image(img, polar_bear, bear_x, bear_y, size=(bear_w, bear_h))
 
-            # 優先級 2：如果張嘴 -> 觸發【愛因斯坦模式】
             elif lip_dist > (face_height * 0.15):
                 self.is_einstein_active = True
                 status_text = "ACTIVE: Einstein Mode"
@@ -194,27 +183,31 @@ class VideoProcessor:
                     tongue_y = int(lower_lip.y * h - tongue_h * 0.4)
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
             
-            # 優先級 5：無動作狀態 -> 提示拍下照片會變成【路易十六】
             else:
                 status_text = "ACTIVE: Louis XVI Mode (Ready to Tomato)"
 
-        #cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         self.latest_filter = img.copy()
         return frame.from_ndarray(img, format="bgr24")
+
+# --- 雲端 WebRTC 伺服器設定 ---
+# 為了防止在 Streamlit 雲端伺服器上部署時視訊斷線，此處加入 Google 的公共 STUN 伺服器
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
 
 # --- 網頁畫面佈局 ---
 ctx = webrtc_streamer(
     key="camera-step-by-step",
     video_processor_factory=VideoProcessor,
+    rtc_configuration=RTC_CONFIGURATION, # 這裡加入了雲端連線設定
     media_stream_constraints={"video": True, "audio": False}
 )
 
-if st.button("📸 Capture (拍照)", use_container_width=True):
+if st.button("📸 Capture (拍照)", width="stretch"):
     if ctx.video_processor and ctx.video_processor.latest_orig is not None:
         orig_img = ctx.video_processor.latest_orig.copy()
         filter_img = ctx.video_processor.latest_filter.copy()
         
-        # 🎯 拍照修正邏輯：只有在「非佛祖」、「非秦始皇」、「非愛因斯坦」三者皆非時，才觸發路易十六番茄頭！
         if (not ctx.video_processor.is_buddha_active and 
             not ctx.video_processor.is_qin_active and 
             not ctx.video_processor.is_einstein_active):
@@ -257,9 +250,9 @@ if st.session_state.history:
     current_orig, current_filter = st.session_state.history[0]
     col_orig, col_filt = st.columns(2)
     with col_orig:
-        st.image(current_orig, caption="拍到的原影像", use_container_width=True)
+        st.image(current_orig, caption="拍到的原影像", width="stretch")
     with col_filt:
-        st.image(current_filter, caption="濾鏡影像", use_container_width=True)
+        st.image(current_filter, caption="濾鏡影像", width="stretch")
 
     st.markdown("---")
     st.subheader("📜 歷史拍照紀錄 (最多儲存 8 張)")
@@ -268,4 +261,4 @@ if st.session_state.history:
     for idx, (orig, filt) in enumerate(st.session_state.history):
         col_idx = idx % 4
         with cols[col_idx]:
-            st.image(filt, use_container_width=True)
+            st.image(filt, width="stretch")
