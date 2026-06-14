@@ -223,3 +223,18 @@ st.markdown("---")
 
 if st.session_state.history:
     st.subheader("🖼️ 剛剛拍到的影像")
+    current_orig, current_filter = st.session_state.history[0]
+    col_orig, col_filt = st.columns(2)
+    with col_orig:
+        st.image(current_orig, caption="拍到的原影像", use_container_width=True)
+    with col_filt:
+        st.image(current_filter, caption="濾鏡影像（路易十六模式會在這加上番茄）", use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📜 歷史拍照紀錄 (最多儲存 8 張)")
+    
+    cols = st.columns(4)
+    for idx, (orig, filt) in enumerate(st.session_state.history):
+        col_idx = idx % 4
+        with cols[col_idx]:
+            st.image(filt, use_container_width=True)
