@@ -6,11 +6,10 @@ import numpy as np
 
 st.title("像個偉(偽)人一樣 📸")
 st.write("👉 做出表情或手勢來變身！\n"
-         "- 手心朝己且攤平 ✋：變身【孔子】（即時戴帽子＋鬍鬚＋下方古裝袖子）\n"
          "- 閉上雙眼 👁️❌：變身【釋迦牟尼佛】（即時頭頂發光）\n"
          "- 對鏡頭比讚 👍：變身【秦始皇】（即時戴帽子＋下方北極熊）\n"
          "- 張開嘴巴 😮：變身【愛因斯坦】（即時畫面轉黑白＋爆炸頭吐舌）\n"
-         "- 直接拍照（不動作）：拍下後變身【路易十六】（頭變番茄）")
+         "- 直接拍照（不動作）：哼哼你拍了就知道了")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -235,7 +234,7 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
                 
                 if louis_tomato is not None:
                     tomato_scale = louis_tomato.shape[0] / louis_tomato.shape[1]
-                    tomato_w = face_size
+                    tomato_w = face_size*1.5
                     tomato_h = int(tomato_w * tomato_scale)
                     tomato_x = center_x - int(tomato_w / 2)
                     tomato_y = center_y - int(tomato_h / 2)
