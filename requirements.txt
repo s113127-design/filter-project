@@ -1,5 +1,7 @@
-streamlit>=1.58.0
-streamlit-webrtc>=0.72.1
-aiortc>=1.14.0
+streamlit>=1.51.0
+streamlit-webrtc==0.72.1
 opencv-python-headless
-mediapipe
+mediapipe==0.10.14
+numpy<2.0.0
+protobuf>=4.25.3,<5
+
