@@ -121,7 +121,7 @@ class VideoProcessor:
                     cap_scale = qin_cap.shape[0] / qin_cap.shape[1]
                     cap_h = int(cap_w * cap_scale)
                     
-                    cap_x = int(forehead.x * w - cap_w / 2)
+                    cap_x = int(forehead.x * w - cap_w / 1.8)
                     cap_y = int(forehead.y * h - cap_h * 0.3) # 帽簷蓋到額頭上方
                     img = overlay_image(img, qin_cap, cap_x, cap_y, size=(cap_w, cap_h))
                 
