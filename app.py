@@ -5,7 +5,7 @@ import mediapipe as mp
 import numpy as np
 
 st.title("像個偉(偽)人一樣 📸")
-st.write("👉 做出表情來變身！\n- 即時張開嘴巴：變身【愛因斯坦】\n- 直接拍照（不張嘴）：拍下後變身【路易十六】（頭變番茄）")
+st.write("👉 做出表情或手勢來變身！\n- 張開嘴巴：變身【愛因斯坦】（即時生效）\n- 對鏡頭比讚 👍：變身【秦始皇】（即時戴帽子＋下方北極熊）\n- 直接拍照（不做動作）：拍下後變身【路易十六】（頭變番茄）")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -14,11 +14,13 @@ if "history" not in st.session_state:
 def load_resources():
     e_hair = cv2.imread("assets/Einstein_hair.png", cv2.IMREAD_UNCHANGED)
     e_tongue = cv2.imread("assets/Einstein_tongue.png", cv2.IMREAD_UNCHANGED)
-    # ─── 修正：移除聖光，只載入番茄 ───
     tomato = cv2.imread("assets/tomato.png", cv2.IMREAD_UNCHANGED)
-    return e_hair, e_tongue, tomato
+    # ─── 新增：載入秦始皇與北極熊素材 ───
+    q_cap = cv2.imread("assets/qinshihuang_cap.png", cv2.IMREAD_UNCHANGED)
+    p_bear = cv2.imread("assets/polar_bear.png", cv2.IMREAD_UNCHANGED)
+    return e_hair, e_tongue, tomato, q_cap, p_bear
 
-einstein_hair, einstein_tongue, louis_tomato = load_resources()
+einstein_hair, einstein_tongue, louis_tomato, qin_cap, polar_bear = load_resources()
 
 def overlay_image(background, overlay, x, y, size=None):
     if overlay is None: return background
@@ -44,6 +46,7 @@ def overlay_image(background, overlay, x, y, size=None):
     return background
 
 mp_face_mesh = mp.solutions.face_mesh
+mp_hands = mp.solutions.hands  # ─── 新增：手部偵測模組 ───
 
 class VideoProcessor:
     def __init__(self):
@@ -52,9 +55,15 @@ class VideoProcessor:
             refine_landmarks=True, 
             min_detection_confidence=0.5
         )
+        self.hands = mp_hands.Hands(
+            max_num_hands=1,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
         self.latest_orig = None
         self.latest_filter = None
-        self.is_einstein_active = False # 紀錄拍照瞬間是不是愛因斯坦狀態
+        self.is_einstein_active = False
+        self.is_qin_active = False # 紀錄拍照瞬間是不是秦始皇狀態
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -62,11 +71,31 @@ class VideoProcessor:
         
         h, w, _ = img.shape
         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # 進行 AI 辨識
         face_results = self.face_mesh.process(rgb_img)
+        hand_results = self.hands.process(rgb_img)
         
         status_text = "Scanning... Make a gesture!"
-        self.is_einstein_active = False # 預設不是愛因斯坦
+        self.is_einstein_active = False
+        self.is_qin_active = False
         
+        # ─── 步驟一：先判定手勢是否「比讚」───
+        if hand_results.multi_hand_landmarks:
+            hand_landmarks = hand_results.multi_hand_landmarks[0].landmark
+            
+            # 比讚演算法：大拇指尖(4) 高於 大拇指根部(2)，且其餘四指(8, 12, 16, 20)皆收起（其指尖低於關節）
+            # 由於網頁視訊 Y 軸朝下，指尖 Y 小於關節 Y 代表指尖在上。
+            thumb_is_up = hand_landmarks[4].y < hand_landmarks[2].y
+            index_is_closed = hand_landmarks[8].y > hand_landmarks[6].y
+            middle_is_closed = hand_landmarks[12].y > hand_landmarks[10].y
+            ring_is_closed = hand_landmarks[16].y > hand_landmarks[14].y
+            pinky_is_closed = hand_landmarks[20].y > hand_landmarks[18].y
+            
+            if thumb_is_up and index_is_closed and middle_is_closed and ring_is_closed and pinky_is_closed:
+                self.is_qin_active = True
+
+        # ─── 步驟二：處理人臉與濾鏡疊加 ───
         if face_results.multi_face_landmarks:
             face_landmarks = face_results.multi_face_landmarks[0].landmark
             
@@ -78,8 +107,36 @@ class VideoProcessor:
             face_height = abs(forehead.y - chin.y) * h
             lip_dist = abs(upper_lip.y - lower_lip.y) * h
             
-            # 當張嘴距離大於臉部高度的 15% -> 觸發【愛因斯坦】
-            if lip_dist > (face_height * 0.15):
+            # 優先級 1：如果比讚 -> 觸發【秦始皇模式】
+            if self.is_qin_active:
+                status_text = "ACTIVE: Qin Shi Huang Mode 👍"
+                
+                # A. P 上秦始皇帽子 (qinshihuang_cap.png)
+                if qin_cap is not None:
+                    left_face = face_landmarks[234]
+                    right_face = face_landmarks[454]
+                    face_width = abs(right_face.x - left_face.x) * w
+                    
+                    cap_w = int(face_width * 2.0)  # 冕冠通常比較寬大
+                    cap_scale = qin_cap.shape[0] / qin_cap.shape[1]
+                    cap_h = int(cap_w * cap_scale)
+                    
+                    cap_x = int(forehead.x * w - cap_w / 2)
+                    cap_y = int(forehead.y * h - cap_h * 0.85) # 帽簷蓋到額頭上方
+                    img = overlay_image(img, qin_cap, cap_x, cap_y, size=(cap_w, cap_h))
+                
+                # B. P 上北極熊在畫面最下方中間 (polar_bear.png)
+                if polar_bear is not None:
+                    bear_w = int(w * 0.35)  # 佔據畫面底部約 35% 寬度
+                    bear_scale = polar_bear.shape[0] / polar_bear.shape[1]
+                    bear_h = int(bear_w * bear_scale)
+                    
+                    bear_x = int(w / 2 - bear_w / 2)  # 置中
+                    bear_y = h - bear_h               # 貼齊最下方
+                    img = overlay_image(img, polar_bear, bear_x, bear_y, size=(bear_w, bear_h))
+
+            # 優先級 2：如果張嘴 -> 觸發【愛因斯坦模式】
+            elif lip_dist > (face_height * 0.15):
                 self.is_einstein_active = True
                 status_text = "ACTIVE: Einstein Mode"
                 
@@ -108,7 +165,7 @@ class VideoProcessor:
                     tongue_y = int(lower_lip.y * h - tongue_h * 0.4)
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
             
-            # ─── 修正：即時畫面不顯示番茄，只顯示路易十六文字提示 ───
+            # 優先級 3：無動作狀態 -> 提示拍下照片會變成【路易十六】
             else:
                 status_text = "ACTIVE: Louis XVI Mode (Ready to Tomato)"
 
@@ -125,13 +182,11 @@ ctx = webrtc_streamer(
 
 if st.button("📸 Capture (拍照)", use_container_width=True):
     if ctx.video_processor and ctx.video_processor.latest_orig is not None:
-        # 讀取當下拍攝的影像
         orig_img = ctx.video_processor.latest_orig.copy()
         filter_img = ctx.video_processor.latest_filter.copy()
         
-        # ─── 修正：如果不是愛因斯坦模式（代表是路易十六模式），就在照片上 P 番茄 ───
-        if not ctx.video_processor.is_einstein_active:
-            # 重新跑一次偵測，抓取最後拍照這張圖的臉部位置
+        # ─── 拍照邏輯：只有在「非秦始皇」且「非愛因斯坦」時，才觸發路易十六（番茄頭） ───
+        if not ctx.video_processor.is_qin_active and not ctx.video_processor.is_einstein_active:
             h, w, _ = orig_img.shape
             rgb_img = cv2.cvtColor(orig_img, cv2.COLOR_BGR2RGB)
             face_results = ctx.video_processor.face_mesh.process(rgb_img)
@@ -142,7 +197,6 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
                 chin = face_landmarks[152]
                 face_height = abs(forehead.y - chin.y) * h
                 
-                # 計算番茄大小與中心點
                 face_size = int(face_height * 1.8)
                 center_x = int(((face_landmarks[234].x + face_landmarks[454].x) / 2) * w)
                 center_y = int(((forehead.y + chin.y) / 2) * h)
@@ -153,15 +207,11 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
                     tomato_h = int(tomato_w * tomato_scale)
                     tomato_x = center_x - int(tomato_w / 2)
                     tomato_y = center_y - int(tomato_h / 2)
-                    
-                    # 把番茄 P 在濾鏡照片上 (覆蓋原本的臉)
                     filter_img = overlay_image(filter_img, louis_tomato, tomato_x, tomato_y, size=(tomato_w, tomato_h))
         
-        # 轉為 Streamlit 顯示用的 RGB 格式
         orig_rgb = cv2.cvtColor(orig_img, cv2.COLOR_BGR2RGB)
         filter_rgb = cv2.cvtColor(filter_img, cv2.COLOR_BGR2RGB)
         
-        # 存入歷史紀錄
         st.session_state.history.insert(0, (orig_rgb, filter_rgb))
         if len(st.session_state.history) > 8:
             st.session_state.history.pop()
@@ -173,18 +223,3 @@ st.markdown("---")
 
 if st.session_state.history:
     st.subheader("🖼️ 剛剛拍到的影像")
-    current_orig, current_filter = st.session_state.history[0]
-    col_orig, col_filt = st.columns(2)
-    with col_orig:
-        st.image(current_orig, caption="拍到的原影像", use_container_width=True)
-    with col_filt:
-        st.image(current_filter, caption="濾鏡影像（路易十六模式會在這加上番茄）", use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📜 歷史拍照紀錄 (最多儲存 8 張)")
-    
-    cols = st.columns(4)
-    for idx, (orig, filt) in enumerate(st.session_state.history):
-        col_idx = idx % 4
-        with cols[col_idx]:
-            st.image(filt, use_container_width=True)
