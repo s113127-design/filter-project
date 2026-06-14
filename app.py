@@ -136,7 +136,7 @@ class VideoProcessor:
                     img = overlay_image(img, holy_light, light_x, light_y, size=(light_w, light_h))
 
             # 優先級 2：如果比讚 -> 觸發【秦始皇模式】
-            if self.is_qin_active:
+            elif self.is_qin_active:
                 status_text = "ACTIVE: Qin Shi Huang Mode 👍"
                 
                 # A. P 上秦始皇帽子 (qinshihuang_cap.png)
