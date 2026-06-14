@@ -194,11 +194,11 @@ class VideoProcessor:
                     tongue_y = int(lower_lip.y * h - tongue_h * 0.4)
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
             
-            # 優先級 3：無動作狀態 -> 提示拍下照片會變成【路易十六】
+            # 優先級 5：無動作狀態 -> 提示拍下照片會變成【路易十六】
             else:
                 status_text = "ACTIVE: Louis XVI Mode (Ready to Tomato)"
 
-        cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        #cv2.putText(img, status_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         self.latest_filter = img.copy()
         return frame.from_ndarray(img, format="bgr24")
 
