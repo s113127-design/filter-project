@@ -131,7 +131,7 @@ class VideoProcessor:
                         * w
                     )
                     
-                    tongue_w = int(mouth_width * 2.3)
+                    tongue_w = int(mouth_width * 2.1)
             
                     scale = (
                         einstein_tongue.shape[0]
@@ -147,7 +147,7 @@ class VideoProcessor:
                     #eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
                     tongue_y = int(
                         lower_lip.y * h
-                        - tongue_h * 1.2
+                        - tongue_h * 0.8
                     )
             
                     img = overlay_image(
