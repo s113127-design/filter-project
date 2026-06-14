@@ -23,15 +23,9 @@ def load_resources():
     q_cap = cv2.imread("assets/qinshihuang_cap.png", cv2.IMREAD_UNCHANGED)
     p_bear = cv2.imread("assets/polar_bear.png", cv2.IMREAD_UNCHANGED)
     h_light = cv2.imread("assets/holy_light.png", cv2.IMREAD_UNCHANGED)
-    # ─── 新增：載入孔子素材 ───
-    k_cap = cv2.imread("assets/kongzi_cap.png", cv2.IMREAD_UNCHANGED)
-    k_beard = cv2.imread("assets/kongzi_beard.png", cv2.IMREAD_UNCHANGED)
-    k_sleeves = cv2.imread("assets/kongzi_sleeves.png", cv2.IMREAD_UNCHANGED)
-    return e_hair, e_tongue, tomato, q_cap, p_bear, h_light, k_cap, k_beard, k_sleeves
+    return e_hair, e_tongue, tomato, q_cap, p_bear, h_light
 
-# 承接變數
-(einstein_hair, einstein_tongue, louis_tomato, qin_cap, polar_bear, holy_light, 
- kongzi_cap, kongzi_beard, kongzi_sleeves) = load_resources()
+einstein_hair, einstein_tongue, louis_tomato, qin_cap, polar_bear, holy_light = load_resources()
 
 def overlay_image(background, overlay, x, y, size=None):
     if overlay is None: return background
@@ -76,7 +70,6 @@ class VideoProcessor:
         self.is_einstein_active = False
         self.is_qin_active = False # 紀錄拍照瞬間是不是秦始皇狀態
         self.is_buddha_active = False # ─── 新增：紀錄拍照瞬間是不是佛祖狀態 ───
-        self.is_kongzi_active = False # 紀錄拍照瞬間是不是孔子狀態
 
 
     def recv(self, frame):
@@ -95,47 +88,20 @@ class VideoProcessor:
         self.is_qin_active = False
         self.is_buddha_active = False # 每影格重新偵測時先歸零
         
-        # ─── 手勢判定：秦始皇(比讚) 與 孔子(手心朝內攤平) ───
+        # ─── 步驟一：先判定手勢是否「比讚」───
         if hand_results.multi_hand_landmarks:
             hand_landmarks = hand_results.multi_hand_landmarks[0].landmark
             
-            # 各手指尖與關節 Y 軸關係 (指尖 Y < 關節 Y 代表手指伸直)
+            # 比讚演算法：大拇指尖(4) 高於 大拇指根部(2)，且其餘四指(8, 12, 16, 20)皆收起（其指尖低於關節）
+            # 由於網頁視訊 Y 軸朝下，指尖 Y 小於關節 Y 代表指尖在上。
             thumb_is_up = hand_landmarks[4].y < hand_landmarks[2].y
-            index_is_straight = hand_landmarks[8].y < hand_landmarks[6].y
-            middle_is_straight = hand_landmarks[12].y < hand_landmarks[10].y
-            ring_is_straight = hand_landmarks[16].y < hand_landmarks[14].y
-            pinky_is_straight = hand_landmarks[20].y < hand_landmarks[18].y
+            index_is_closed = hand_landmarks[8].y > hand_landmarks[6].y
+            middle_is_closed = hand_landmarks[12].y > hand_landmarks[10].y
+            ring_is_closed = hand_landmarks[16].y > hand_landmarks[14].y
+            pinky_is_closed = hand_landmarks[20].y > hand_landmarks[18].y
             
-            # 1. 秦始皇手勢：大拇指朝上，其餘四指握拳
-            if thumb_is_up and not index_is_straight and not middle_is_straight and not ring_is_straight and not pinky_is_straight:
+            if thumb_is_up and index_is_closed and middle_is_closed and ring_is_closed and pinky_is_closed:
                 self.is_qin_active = True
-                self.is_kongzi_active = False # 🎯 確保此時關閉孔子
-                
-            # 2. 孔子手勢：五指全部伸直攤平，且判定手心朝向自己
-            elif thumb_is_up and index_is_straight and middle_is_straight and ring_is_straight and pinky_is_straight:
-                self.is_qin_active = False # 🎯 確保此時關閉秦始皇
-                handedness = hand_results.multi_handedness[0].classification[0].label
-                # 因為鏡頭是左右鏡像的，MediaPipe 偵測到的 Left/Right 會跟實體相反
-                if handedness == "Left": # 畫面的右邊
-                    if hand_landmarks[4].x > hand_landmarks[20].x:
-                        self.is_kongzi_active = True
-                    else:
-                        self.is_kongzi_active = False # 🎯 補上：不符手心朝內時關閉
-                else: # 畫面的左邊
-                    if hand_landmarks[4].x < hand_landmarks[20].x:
-                        self.is_kongzi_active = True
-                    else:
-                        self.is_kongzi_active = False # 🎯 補上：不符手心朝內時關閉
-            
-            else:
-                # 🎯 補上：如果手伸出來，但既不是比讚也不是孔子手勢，兩者都要關閉
-                self.is_qin_active = False
-                self.is_kongzi_active = False
-                
-        else:
-            # 🎯 補上：如果畫面中完全沒有手，兩者也都要立刻關閉
-            self.is_qin_active = False
-            self.is_kongzi_active = False
 
         # ─── 步驟二：處理人臉與濾鏡疊加 ───
         if face_results.multi_face_landmarks:
@@ -153,42 +119,8 @@ class VideoProcessor:
             left_eye_dist = abs(face_landmarks[159].y - face_landmarks[145].y) * h
             right_eye_dist = abs(face_landmarks[386].y - face_landmarks[374].y) * h
             
-            # 🎯 優先級 1：五指攤平手心朝內 -> 觸發【孔子模式】
-            if self.is_kongzi_active:
-                status_text = "ACTIVE: Confucius Mode ✋"
-                
-                left_face = face_landmarks[234]
-                right_face = face_landmarks[454]
-                face_width = abs(right_face.x - left_face.x) * w
-                
-                # A. P 上孔子帽子 (kongzi_cap.png)
-                if kongzi_cap is not None:
-                    cap_w = int(face_width * 2.2)
-                    cap_scale = kongzi_cap.shape[0] / kongzi_cap.shape[1]
-                    cap_h = int(cap_w * cap_scale)
-                    cap_x = int(forehead.x * w - cap_w / 2)
-                    cap_y = int(forehead.y * h - cap_h * 0.85)
-                    img = overlay_image(img, kongzi_cap, cap_x, cap_y, size=(cap_w, cap_h))
-                    
-                # B. P 上鬍鬚 (kongzi_beard.png)
-                if kongzi_beard is not None:
-                    beard_w = int(face_width * 1.2)
-                    beard_scale = kongzi_beard.shape[0] / kongzi_beard.shape[1]
-                    beard_h = int(beard_w * beard_scale)
-                    beard_x = int(chin.x * w - beard_w / 2)
-                    beard_y = int(chin.y * h - beard_h * 0.15) # 從下巴往下延伸
-                    img = overlay_image(img, kongzi_beard, beard_x, beard_y, size=(beard_w, beard_h))
-                    
-                # C. P 上古裝袖子在畫面最下方正中間 (kongzi_sleeves.png)
-                if kongzi_sleeves is not None:
-                    s_w = int(w * 0.8) # 寬大袖子，佔據畫面下方 80% 寬度
-                    s_scale = kongzi_sleeves.shape[0] / kongzi_sleeves.shape[1]
-                    s_h = int(s_w * s_scale)
-                    s_x = int(w / 2 - s_w / 2)
-                    s_y = h - s_h # 貼齊最下方
-                    img = overlay_image(img, kongzi_sleeves, s_x, s_y, size=(s_w, s_h))
-            # 優先級 2：如果兩眼垂直距離小於人臉高度的 1.5% -> 觸發【釋迦牟尼佛模式】
-            elif left_eye_dist < (face_height * 0.015) and right_eye_dist < (face_height * 0.015):
+            # 優先級 1：如果兩眼垂直距離小於人臉高度的 1.5% -> 觸發【釋迦牟尼佛模式】
+            if left_eye_dist < (face_height * 0.015) and right_eye_dist < (face_height * 0.015):
                 self.is_buddha_active = True
                 status_text = "ACTIVE: Shakyamuni Buddha Mode 🪷"
                 
@@ -205,7 +137,7 @@ class VideoProcessor:
                     light_y = int(forehead.y * h - light_h * 0.65) # 置中偏頭頂上方
                     img = overlay_image(img, holy_light, light_x, light_y, size=(light_w, light_h))
 
-            # 優先級 3：如果比讚 -> 觸發【秦始皇模式】
+            # 優先級 2：如果比讚 -> 觸發【秦始皇模式】
             elif self.is_qin_active:
                 status_text = "ACTIVE: Qin Shi Huang Mode 👍"
                 
@@ -233,7 +165,7 @@ class VideoProcessor:
                     bear_y = h - bear_h               # 貼齊最下方
                     img = overlay_image(img, polar_bear, bear_x, bear_y, size=(bear_w, bear_h))
 
-            # 優先級 4：如果張嘴 -> 觸發【愛因斯坦模式】
+            # 優先級 2：如果張嘴 -> 觸發【愛因斯坦模式】
             elif lip_dist > (face_height * 0.15):
                 self.is_einstein_active = True
                 status_text = "ACTIVE: Einstein Mode"
@@ -263,7 +195,7 @@ class VideoProcessor:
                     tongue_y = int(lower_lip.y * h - tongue_h * 0.4)
                     img = overlay_image(img, einstein_tongue, tongue_x, tongue_y, size=(tongue_w, tongue_h))
             
-            # 優先級 5：無動作狀態 -> 提示拍下照片會變成【路易十六】
+            # 優先級 3：無動作狀態 -> 提示拍下照片會變成【路易十六】
             else:
                 status_text = "ACTIVE: Louis XVI Mode (Ready to Tomato)"
 
@@ -283,11 +215,10 @@ if st.button("📸 Capture (拍照)", use_container_width=True):
         orig_img = ctx.video_processor.latest_orig.copy()
         filter_img = ctx.video_processor.latest_filter.copy()
         
-        # 🎯 四重保險：非孔子、非佛祖、非秦始皇、非愛因斯坦時，拍照才加番茄頭！
+        # 🎯 拍照修正邏輯：只有在「非佛祖」、「非秦始皇」、「非愛因斯坦」三者皆非時，才觸發路易十六番茄頭！
         if (not ctx.video_processor.is_buddha_active and 
             not ctx.video_processor.is_qin_active and 
-            not ctx.video_processor.is_einstein_activenot and
-            not ctx.video_processor.is_kongzi_active):
+            not ctx.video_processor.is_einstein_active):
             h, w, _ = orig_img.shape
             rgb_img = cv2.cvtColor(orig_img, cv2.COLOR_BGR2RGB)
             face_results = ctx.video_processor.face_mesh.process(rgb_img)
